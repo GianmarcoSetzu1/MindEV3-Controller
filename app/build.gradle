@@ -1,0 +1,57 @@
+apply plugin: 'com.android.application'
+apply plugin:  'com.chaquo.python'
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "29.0.2"
+    defaultConfig {
+        applicationId 'it.unive.dais.legodroid.app'
+        minSdkVersion 21
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+
+        python {
+            buildPython "C:/Users/pc/AppData/Local/Programs/Python/Python38/python.exe"
+        }
+
+        python {
+            pip {
+                install "python-osc"
+                install "numpy"
+            }
+        }
+
+        sourceSets {
+            main {
+                python.srcDir "src/main/python"
+            }
+        }
+    }
+
+    buildTypes {
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    productFlavors {
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:30.0.0'
+    implementation 'com.android.support:support-annotations:28.0.0'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    implementation project(':lib')
+}
