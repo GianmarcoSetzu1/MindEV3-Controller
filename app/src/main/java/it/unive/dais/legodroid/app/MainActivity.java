@@ -2,10 +2,12 @@ package it.unive.dais.legodroid.app;
 
 import android.annotation.SuppressLint;
 import android.graphics.Color;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.util.Pair;
 import android.view.MotionEvent;
@@ -133,6 +135,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         textView = findViewById(R.id.textView);
 
+        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        String ipAddress = Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
+
         thread_repeat = null;
         thread_register = null;
 
@@ -159,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         Python py = Python.getInstance();
                         PyObject osc_server = py.getModule("OSCserver");//.get("__name__");//.call();
-                        PyObject obj = osc_server.callAttr("main");
+                        PyObject obj = osc_server.callAttr("main", ipAddress);
                         accXY = null;
                         accXY = new ArrayList<Pair<Double, Double>>();
                         readText();
@@ -231,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
                 });
 
                 thread_repeat.start();
-
+                ready.setVisibility(View.INVISIBLE);
                 //listenMind.setEnabled(true);
                 //listenMind.setText("LISTEN MINDMONITOR");
 
@@ -315,7 +320,7 @@ public class MainActivity extends AppCompatActivity {
         while(index < accXY.size()) {
             long n = new Date().getTime();
             long elapsedTime = n - startTime;
-            if (elapsedTime >= 500) {
+            if (elapsedTime >= 850) {   //500
                 if(accXY.get(index).first > 0 && accXY.get(index).second > 0) {
                     if (stopped && !forward) {
                         Prelude.trap(() -> ev3.run(this::legoMain));

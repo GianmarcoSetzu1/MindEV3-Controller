@@ -7,7 +7,7 @@ from pythonosc import osc_server
 from os.path import dirname, join
 from com.chaquo.python import Python
 
-ip = "192.168.1.9"
+#ip = "192.168.1.35"
 port = 5000
 
 files_dir = str(Python.getPlatform().getApplication().getFilesDir())
@@ -73,7 +73,7 @@ def marker_handler(address: str, i):
         print("Recording Stopped.")
 
 
-def main():
+def main(ip):
     global recording
     global server
     dispatche = dispatcher.Dispatcher()
