@@ -1,4 +1,4 @@
-"# MindEV3-Controller"
+# MindEV3-Controller
 
 Developed by Gianmarco Setzu 
 
