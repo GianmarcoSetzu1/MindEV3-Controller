@@ -7,7 +7,6 @@ from pythonosc import osc_server
 from os.path import dirname, join
 from com.chaquo.python import Python
 
-#ip = "192.168.1.35"
 port = 5000
 
 files_dir = str(Python.getPlatform().getApplication().getFilesDir())
@@ -19,10 +18,11 @@ accX = []
 accY = []
 result = []
 server = None
-#f = open(filePath, 'w+')
+
 
 def muse_handler(address, *args):
     """handle all muse data"""
+    global result
     global recording
     global enable
     global accX
@@ -42,20 +42,22 @@ def muse_handler(address, *args):
             if len(accX) == len(accY) >= 64:
                 media.append(mean(accX))
                 media.append(mean(accY))
-
-                # server.shutdown()  # The file is written, then stop the recording
                 col1 = []
                 accX = []
                 accY = []
-                # print(f"{address}: {args[0]}, {args[1]}")
                 print(media)
                 result.append(media)
+                array = numpy.array(result)
+                result = []
+                numpy.savetxt(filePath, array, delimiter=",", fmt='%.14f')
+                server.shutdown()
+
 
 
 def marker_handler(address: str, i):
     global recording
     global server
-    global result
+
     dateTimeObj = datetime.now()
     timestampStr = dateTimeObj.strftime("%Y-%m-%d %H:%M:%S.%f")
     markerNum = address[-1]
@@ -64,12 +66,7 @@ def marker_handler(address: str, i):
         print("Recording Started.")
     if markerNum == "2":
         recording = False
-        array = numpy.array(result)
-        result = []
-        numpy.savetxt(filePath, array, delimiter=",", fmt='%.14f')
-        #f.close()
         server.shutdown()
-        #return result
         print("Recording Stopped.")
 
 
@@ -83,12 +80,8 @@ def main(ip):
     print("Press 1 to starting and 2 to stopping")
     if server == None:
         server = osc_server.ThreadingOSCUDPServer((ip, port), dispatche)  # Sostituire con il tuo IP
-    # print("Listening on UDP port " + str(port) + "\nSend Marker 1 to Start recording and Marker 2 to Stop Recording.")
     server.serve_forever()
-    #return result
 
 
 if __name__ == "__main__":
-    print("CIAO")
-    #result = []
     main()

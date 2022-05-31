@@ -1,32 +1,22 @@
 package it.unive.dais.legodroid.app;
 
-import android.annotation.SuppressLint;
-import android.graphics.Color;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.util.Pair;
-import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,13 +63,15 @@ public class MainActivity extends AppCompatActivity {
     boolean left = false;
     boolean right = false;
     boolean stopped = true;
-    private List<Pair<Double, Double>> accXY = null;//= new ArrayList<Pair<Double, Double>>();
-    private long startTime = System.currentTimeMillis();
+    private Pair<Double, Double> accXY = null;
     int index = 0;
 
     private EV3 ev3;
     Thread thread_repeat;
     Thread thread_register;
+
+    Boolean start = false;
+
 
     private void updateStatus(@NonNull Plug p, String key, Object value) {
         Log.d(TAG, String.format("%s: %s: %s", p, key, value));
@@ -87,16 +79,18 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> textView.setText(statusMap.toString()));
     }
 
+
+    /* From here */
+    /* Legodroid's methods, left for any future developments */
+
     private void setupEditable(@IdRes int id, Consumer<Integer> f) {
         EditText e = findViewById(id);
         e.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-            }
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {}
 
             @Override
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-            }
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {}
 
             @Override
             public void afterTextChanged(Editable s) {
@@ -111,20 +105,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    // example of custom API
     private static class MyCustomApi extends EV3.Api {
-
         private MyCustomApi(@NonNull GenEV3<? extends EV3.Api> ev3) {
             super(ev3);
         }
-
         public void mySpecialCommand() { /* do something special */ }
     }
 
+    /* End */
+
+
+
     // quick wrapper for accessing the private field MainActivity.motor only when not-null; also ignores any exception thrown
     private void applyMotor(@NonNull ThrowingConsumer<TachoMotor, Throwable> f) {
-        //if (motor != null)
-        //    Prelude.trap(() -> f.call(motor));
         if (motorB != null) Prelude.trap(() -> f.call(motorB));
         if (motorC != null) Prelude.trap(() -> f.call(motorC));
     }
@@ -141,6 +134,7 @@ public class MainActivity extends AppCompatActivity {
         thread_repeat = null;
         thread_register = null;
 
+
         Button bluetooth = findViewById(R.id.bluetooth);
         try {
             // connect to EV3 via bluetooth
@@ -155,97 +149,48 @@ public class MainActivity extends AppCompatActivity {
 
             Button listenMind = findViewById(R.id.listenButton);
             listenMind.setOnClickListener(v -> {
-                thread_register = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Log.d("Ascolto...", "OK");
-                        if (!Python.isStarted()) {
-                            Python.start(new AndroidPlatform(getApplicationContext()));//context));
+                start = !start;
+                Log.d("Start : ", String.valueOf(start));
+                    thread_register = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Log.d("Ascolto...", "OK");
+                            if (!Python.isStarted()) {
+                                Python.start(new AndroidPlatform(getApplicationContext()));
+                            }
+                            Python py = Python.getInstance();
+                            PyObject osc_server = py.getModule("OSCserver");
+                            while (start) {
+                                PyObject obj = osc_server.callAttr("main", ipAddress);
+                                repeat();
+                            }
+                            if (!ev3.isCancelled())
+                                ev3.cancel();
+                            forward = false;
+                            backward = false;
+                            left = false;
+                            right = false;
+                            stopped = true;
                         }
-                        Python py = Python.getInstance();
-                        PyObject osc_server = py.getModule("OSCserver");//.get("__name__");//.call();
-                        PyObject obj = osc_server.callAttr("main", ipAddress);
-                        accXY = null;
-                        accXY = new ArrayList<Pair<Double, Double>>();
-                        readText();
+                    });
+                    thread_register.start();  // wait the server shutdown
+                    thread_register.interrupt();
+                    read = false;
 
-                    }
-                });
-                thread_register.start();  // wait the server shutdown
-                thread_register.interrupt();
-                read = false;
-
-
-                //double[][] data = obj.toJava(double[][].class);
-                /*
-
-                    The method main doesn't return anything!
-                    The array resulting may be returned by maker handler, but is not the main function
-
-                    Try to write a csv file and read it from MainActivity
-
-                 */
-
-                //listenMind.setText("OK!");
-                //readText();
-                Log.d("Path", getApplication().getFilesDir().getAbsolutePath().toString());
-                ready.setVisibility(View.VISIBLE);
-
-                //listenMind.setEnabled(false);
-
-
+                    Log.d("Path", getApplication().getFilesDir().getAbsolutePath().toString());
+                    ready.setVisibility(View.VISIBLE);
+                    ready.setVisibility(View.INVISIBLE);
             });
-
-            /*
-                These two rows must return upper the code
-             */
-
-
-
-
-            /* data must contain the average of all the stream of Muse */
-            /* The resulting content must be related to the acc_x and acc_y like mean_xy*/
-
-
-
-            //Try importing the file into the app
-
-      /*      if (!read) {
-                accXY = null;
-                accXY = new ArrayList<Pair<Double, Double>>();
-                readText();
-                read = true;
-            }
-
-     */
-
-            //read csv each 0.5 second
-
-
-
 
 
             Button stopButton = findViewById(R.id.stopButton);
-
             stopButton.setOnClickListener(v -> {
-                thread_repeat = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        repeat();
-                    }
-                });
-
-                thread_repeat.start();
-                ready.setVisibility(View.INVISIBLE);
-                //listenMind.setEnabled(true);
-                //listenMind.setText("LISTEN MINDMONITOR");
-
-                //ev3.cancel();   // fire cancellation signal to the EV3 task
-
+                if (!ev3.isCancelled())
+                    ev3.cancel();
             });
 
-            Button startButton = findViewById(R.id.startButton);
 
+            Button startButton = findViewById(R.id.startButton);
             startButton.setOnClickListener(v ->  {
                 if (!ev3.isCancelled())
                     ev3.cancel();
@@ -285,27 +230,12 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {
-
-                }
+                public void onStartTrackingTouch(SeekBar seekBar) {}
 
                 @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {
+                public void onStopTrackingTouch(SeekBar seekBar) {}
 
-                }
             });
-
-
-
-            // alternatively with GenEV3
-//          startButton.setOnClickListener(v -> Prelude.trap(() -> ev3.run(this::legoMainCustomApi, MyCustomApi::new)));
-
-            /*setupEditable(R.id.powerEdit, (x) -> applyMotor((m) -> {
-                m.setPower(x);   //m.setSpeed(x);
-                m.start();      // setPower() and setSpeed() require call to start() afterwards
-            }));*/
-
-
 
 
 
@@ -315,36 +245,60 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void stop() {
+        if (!ev3.isCancelled()) {
+            ev3.cancel();
+        }
+    }
+
 
     private void repeat() {
-        while(index < accXY.size()) {
-            long n = new Date().getTime();
-            long elapsedTime = n - startTime;
-            if (elapsedTime >= 850) {   //500
-                if(accXY.get(index).first > 0 && accXY.get(index).second > 0) {
-                    if (stopped && !forward) {
-                        Prelude.trap(() -> ev3.run(this::legoMain));
-                        stopped = false;
-                        forward = true;
-                    }
-                    else if (!forward) {
-                        if (!ev3.isCancelled()) {
-                            ev3.cancel();
-                            index--;
-                        }
-                        stopped = true;
-                        backward = false;
-                        left = false;
-                        right = false;
-                    }
+            readText();
+            Log.d("Read", "OK");
+            if(accXY.first > 0.4 && accXY.second > -0.2 && accXY.second < 0.2) {
+                if (stopped && !forward) {
+                    Log.d("Forward : ", String.valueOf(forward));
+                    Prelude.trap(() -> ev3.run(this::legoMain));
+                    stopped = false;
+                    forward = true;
                 }
-                else if(accXY.get(index).first < 0 && accXY.get(index).second < -0.5 ) {
-                    if (stopped && !left) {
-                        Prelude.trap(() -> ev3.run(this::turnLeft));
-                        stopped = false;
-                        left = true;
+                else if (!forward) {
+                    if (!ev3.isCancelled()) {
+                        ev3.cancel();
+                        index--;
                     }
-                    else if (!left) {
+                    stopped = true;
+                    backward = false;
+                    left = false;
+                    right = false;
+                }
+            }
+            else if( accXY.first > -0.2 && accXY.first < 0.3 && accXY.second < -0.4 ) {
+                if (stopped && !left) {
+                    Prelude.trap(() -> ev3.run(this::turnLeft));
+                    stopped = false;
+                    left = true;
+                }
+                else if (!left) {
+                    if (!ev3.isCancelled()) {
+                        ev3.cancel();
+                        index--;
+                    }
+                    stopped = true;
+                    forward = false;
+                    backward = false;
+                    right = false;
+                }
+
+            }
+            else {
+                if (accXY.first < 0.3 && accXY.first > -0.2 && accXY.second > 0.4) {
+                    if (stopped && !right) {
+                        Prelude.trap(() -> ev3.run(this::turnRight));
+                        stopped = false;
+                        right = true;
+                    }
+                    else if (!right) {
                         if (!ev3.isCancelled()) {
                             ev3.cancel();
                             index--;
@@ -352,118 +306,60 @@ public class MainActivity extends AppCompatActivity {
                         stopped = true;
                         forward = false;
                         backward = false;
+                        left = false;
+                    }
+                }
+                else if (accXY.first < - 0.6 && accXY.second > -0.2 && accXY.second < 0.2) {
+                    if (stopped && !backward) {
+                        Prelude.trap(() -> ev3.run(this::back));
+                        stopped = false;
+                        backward = true;
+                    }
+                    else if (!backward) {
+                        if (!ev3.isCancelled()) {
+                            ev3.cancel();
+                            index--;
+                        }
+                        stopped = true;
+                        forward = false;
+                        left = false;
                         right = false;
                     }
-
                 }
                 else {
-                    if (accXY.get(index).second > 0.3) {
-                        if (stopped && !right) {
-                            Prelude.trap(() -> ev3.run(this::turnRight));
-                            stopped = false;
-                            right = true;
-                        }
-                        else if (!right) {
-                            if (!ev3.isCancelled()) {
-                                ev3.cancel();
-                                index--;
-                            }
-                            stopped = true;
-                            forward = false;
-                            backward = false;
-                            left = false;
-                        }
-                    }
-                    else if (accXY.get(index).first < - 0.6) {
-                        if (stopped && !backward) {
-                            Prelude.trap(() -> ev3.run(this::back));
-                            stopped = false;
-                            backward = true;
-                        }
-                        else if (!backward) {
-                            if (!ev3.isCancelled()) {
-                                ev3.cancel();
-                                index--;
-                            }
-                            stopped = true;
-                            forward = false;
-                            left = false;
-                            right = false;
-                        }
-                    }
-                    else {
-                        if (!ev3.isCancelled())
-                            ev3.cancel();
-                    }
-
+                    if (!ev3.isCancelled())
+                        ev3.cancel();
+                    forward = false;
+                    backward = false;
+                    left = false;
+                    right = false;
+                    stopped = true;
                 }
-                Log.d("Time :" , startTime + ", " + n);
-                startTime = n;
-                index ++;
+
             }
-        }
-        index = 0;
-        if (!ev3.isCancelled())
-            ev3.cancel();
-        forward = false;
-        backward = false;
-        left = false;
-        right = false;
-        stopped = true;
-        thread_repeat.interrupt();
-        thread_repeat = null;
     }
 
 
     private void readText() {
         try {
             String file = getApplication().getFilesDir().getAbsolutePath() + File.separator + "mean.csv";
-
-            //File file = new File (getExternalFilesDir(null), "mean_xy1.csv");
             Log.d("File : ", file.toString());
             InputStream inputstream = new FileInputStream(file);
             CSVReader csv = new CSVReader(inputstream);
             List<String[]> readList = csv.read();
-//            int i=0;
             for (String[] scoreData : readList) {
-//                if (i>0) {
-                    Double first = Double.parseDouble(scoreData[0]);
-                    Double second = Double.parseDouble(scoreData[1]);
-                    Pair<Double, Double> p = new Pair<Double, Double>(first, second);
-                    accXY.add(p);
-//                }
-//                i++;
+                Double first = Double.parseDouble(scoreData[0]);
+                Double second = Double.parseDouble(scoreData[1]);
+                Log.d("first & second", String.valueOf(first +","+ second));
+                Pair<Double, Double> p = new Pair<Double, Double>(first, second);
+                accXY = p;
             }
-//            Log.d("First line : ", String.valueOf(accXY.get(150).first) + ", " + String.valueOf(accXY.get(150).second));
             Log.d("Reading", "Ok!");
-
         } catch (Exception e) {
             Log.d("Errore: ", "Lettura del file!");
         }
     }
 
-
-    private void readMuseData() {
-        InputStream inputStream = getResources().openRawResource(R.raw.mean_xy1);
-        CSVReader csv = new CSVReader(inputStream);
-        List<String[]> readList = csv.read();
-        int i=0;
-        for (String[] scoreData : readList) {
-            if (i>0) {
-                Double first = Double.parseDouble(scoreData[0]);
-                Double second = Double.parseDouble(scoreData[1]);
-                Pair<Double, Double> p = new Pair<Double, Double>(first, second);
-                accXY.add(p);
-            }
-            i++;
-        }
-        Log.d("First line : ", String.valueOf(accXY.get(150).first) + ", " + String.valueOf(accXY.get(150).second));
-        Log.d("Reading", "Ok!");
-    }
-
-
-
-    // main program executed by EV3
 
     private void legoMain(EV3.Api api) {
         final String TAG = Prelude.ReTAG("legoMain");
@@ -499,25 +395,10 @@ public class MainActivity extends AppCompatActivity {
                     Future<LightSensor.Color> colf = lightSensor.getColor();
                     LightSensor.Color col = colf.get();
                     updateStatus(lightSensor, "color", col);
-                    // when you need to deal with the UI, you must do it via runOnUiThread()
-                    //runOnUiThread(() -> findViewById(R.id.colorView).setBackgroundColor(col.toARGB32()));
 
                     Future<Boolean> touched = touchSensor.getPressed();
                     updateStatus(touchSensor, "touch", touched.get() ? 1 : 0);
 
-                    /*
-                    Future<Float> pos = motor.getPosition();
-                    updateStatus(motor, "motor position", pos.get());
-
-                    Future<Float> speed = motor.getSpeed();
-                    updateStatus(motor, "motor speed", speed.get());
-
-                    motor.setStepSpeed(20, 0, 5000, 0, true);
-                    motor.waitCompletion();
-                    motor.setStepSpeed(-20, 0, 5000, 0, true);
-                    Log.d(TAG, "waiting for long motor operation completed...");
-                    motor.waitUntilReady();
-                    Log.d(TAG, "long motor operation completed");   */
                     Future<Float> pos = motorB.getPosition();
                     updateStatus(motorB, "motor position", pos.get());
 
@@ -526,10 +407,7 @@ public class MainActivity extends AppCompatActivity {
 
                     motorB.setStepSpeed(this.speed, 0, 5000, 0, true);
                     motorC.setStepSpeed(this.speed, 0, 5000, 0, true);
-                    //motorB.waitCompletion();
-                    //motorB.setStepSpeed(-20, 0, 5000, 0, true);
                     Log.d(TAG, "waiting for long motor operation completed...");
-                    //motorB.waitUntilReady();
                     Log.d(TAG, "long motor operation completed");
 
                 } catch (IOException | InterruptedException | ExecutionException e) {
@@ -579,8 +457,6 @@ public class MainActivity extends AppCompatActivity {
                     Future<LightSensor.Color> colf = lightSensor.getColor();
                     LightSensor.Color col = colf.get();
                     updateStatus(lightSensor, "color", col);
-                    // when you need to deal with the UI, you must do it via runOnUiThread()
-                    //runOnUiThread(() -> findViewById(R.id.colorView).setBackgroundColor(col.toARGB32()));
 
                     Future<Boolean> touched = touchSensor.getPressed();
                     updateStatus(touchSensor, "touch", touched.get() ? 1 : 0);
@@ -593,10 +469,7 @@ public class MainActivity extends AppCompatActivity {
 
                     motorB.setStepSpeed(-this.speed, 0, 5000, 0, true);
                     motorC.setStepSpeed(-this.speed, 0, 5000, 0, true);
-                    //motorB.waitCompletion();
-                    //motorB.setStepSpeed(-20, 0, 5000, 0, true);
                     Log.d(TAG, "waiting for long motor operation completed...");
-                    //motorB.waitUntilReady();
                     Log.d(TAG, "long motor operation completed");
 
                 } catch (IOException | InterruptedException | ExecutionException e) {
@@ -622,7 +495,6 @@ public class MainActivity extends AppCompatActivity {
 
         // get motors
         motorC = api.getTachoMotor(EV3.OutputPort.C);
-        //motorC = api.getTachoMotor(EV3.OutputPort.C);
 
         try {
             applyMotor(TachoMotor::resetPosition);
@@ -645,8 +517,6 @@ public class MainActivity extends AppCompatActivity {
                     Future<LightSensor.Color> colf = lightSensor.getColor();
                     LightSensor.Color col = colf.get();
                     updateStatus(lightSensor, "color", col);
-                    // when you need to deal with the UI, you must do it via runOnUiThread()
-                    //runOnUiThread(() -> findViewById(R.id.colorView).setBackgroundColor(col.toARGB32()));
 
                     Future<Boolean> touched = touchSensor.getPressed();
                     updateStatus(touchSensor, "touch", touched.get() ? 1 : 0);
@@ -660,7 +530,6 @@ public class MainActivity extends AppCompatActivity {
                     motorC.setStepSpeed(this.speed, 0, 5000, 0, true);
 
                     Log.d(TAG, "waiting for long motor operation completed...");
-                    //motorB.waitUntilReady();
                     Log.d(TAG, "long motor operation completed");
 
                 } catch (IOException | InterruptedException | ExecutionException e) {
@@ -685,7 +554,6 @@ public class MainActivity extends AppCompatActivity {
 
         // get motors
         motorB = api.getTachoMotor(EV3.OutputPort.B);
-        //motorC = api.getTachoMotor(EV3.OutputPort.C);
 
         try {
             applyMotor(TachoMotor::resetPosition);
@@ -708,8 +576,6 @@ public class MainActivity extends AppCompatActivity {
                     Future<LightSensor.Color> colf = lightSensor.getColor();
                     LightSensor.Color col = colf.get();
                     updateStatus(lightSensor, "color", col);
-                    // when you need to deal with the UI, you must do it via runOnUiThread()
-                    //runOnUiThread(() -> findViewById(R.id.colorView).setBackgroundColor(col.toARGB32()));
 
                     Future<Boolean> touched = touchSensor.getPressed();
                     updateStatus(touchSensor, "touch", touched.get() ? 1 : 0);
@@ -723,7 +589,6 @@ public class MainActivity extends AppCompatActivity {
                     motorB.setStepSpeed(this.speed, 0, 5000, 0, true);
 
                     Log.d(TAG, "waiting for long motor operation completed...");
-                    //motorB.waitUntilReady();
                     Log.d(TAG, "long motor operation completed");
 
                 } catch (IOException | InterruptedException | ExecutionException e) {
@@ -735,20 +600,6 @@ public class MainActivity extends AppCompatActivity {
             applyMotor(TachoMotor::stop);
         }
     }
-
-
-
-
-
-    // alternative version of the lego main with a custom API
-    private void legoMainCustomApi(MyCustomApi api) {
-        final String TAG = Prelude.ReTAG("legoMainCustomApi");
-        // specialized methods can be safely called
-        api.mySpecialCommand();
-        // stub the other main
-        legoMain(api);
-    }
-
 
 }
 
